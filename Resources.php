@@ -275,7 +275,7 @@ class Resources implements iUseAuthentication, iProvideMultiVersionApi
                 if (count($parts) == 1 && $httpMethod == 'GET') {
                 } else {
                     for ($i = 0; $i < count($parts); $i++) {
-                        if (strlen($parts[$i]) && $parts[$i]{0} == '{') {
+                        if (strlen($parts[$i]) && $parts[$i]{0} == '{' && !static::$placeFormatExtensionBeforeDynamicParts) {
                             $pos = $i - 1;
                             break;
                         }
