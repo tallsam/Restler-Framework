@@ -282,7 +282,18 @@ class Resources implements iUseAuthentication, iProvideMultiVersionApi
                     }
                 }
                 $nickname = $this->_nickname($route);
-                $index = static::$placeFormatExtensionBeforeDynamicParts && $pos > 0 ? $pos : 0;
+
+                if ( static::$placeFormatExtensionBeforeDynamicParts && $pos > 0) {
+                    $index = $pos;
+                }
+                else if (static::$placeFormatExtensionBeforeDynamicParts && $pos <= 0) {
+                    $index = 0;
+                }
+                else {
+                    $index = $pos;
+                }
+
+
                 if (!empty($parts[$index]))
                     $parts[$index] .= $this->formatString;
 
