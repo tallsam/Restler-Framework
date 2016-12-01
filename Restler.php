@@ -304,11 +304,20 @@ class Restler extends EventDispatcher
             $this->call();
             $this->compose();
             $this->postCall();
+            if (Defaults::$returnResponse) {
+                return $this->respond();
+            }
             $this->respond();
         } catch (Exception $e) {
             try{
+                if (Defaults::$returnResponse) {
+                    return $this->message($e);
+                }
                 $this->message($e);
             } catch (Exception $e2) {
+                if (Defaults::$returnResponse) {
+                    return $this->message($e2);
+                }
                 $this->message($e2);
             }
         }
@@ -490,13 +499,20 @@ class Restler extends EventDispatcher
                 = '/' . substr($_SERVER['SCRIPT_FILENAME'], strlen($_SERVER['DOCUMENT_ROOT']) + 1);
 
         list($base, $path) = Util::splitCommonPath(
-            urldecode($_SERVER['REQUEST_URI']),
+            strtok(urldecode($_SERVER['REQUEST_URI']), '?'), //remove query string
             $_SERVER['SCRIPT_NAME']
         );
 
         if (!$this->baseUrl) {
-            $port = isset($_SERVER['SERVER_PORT']) ? $_SERVER['SERVER_PORT'] : '80';
-            $port = isset($_SERVER['HTTP_X_FORWARDED_PORT']) ? $_SERVER['HTTP_X_FORWARDED_PORT'] : $port; // Amazon ELB
+            // Fix port number retrieval if port is specified in HOST header.
+            $host = isset($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : '';
+            $portPos = strpos($host,":");
+            if ($portPos){
+               $port = substr($host,$portPos+1);
+            } else {
+               $port = isset($_SERVER['SERVER_PORT']) ? $_SERVER['SERVER_PORT'] : '80';
+               $port = isset($_SERVER['HTTP_X_FORWARDED_PORT']) ? $_SERVER['HTTP_X_FORWARDED_PORT'] : $port; // Amazon ELB
+            }
             $https = $port == '443' ||
                 (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] == 'https') || // Amazon ELB
                 (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] == 'on');
@@ -508,15 +524,15 @@ class Restler extends EventDispatcher
             $this->baseUrl .= $base;
         }
 
-        $path = rtrim(strtok($path, '?'), '/'); //remove query string and trailing slash if found any
         $path = str_replace(
             array_merge(
                 $this->formatMap['extensions'],
                 $this->formatOverridesMap['extensions']
             ),
             '',
-            $path
+            rtrim($path, '/') //remove trailing slash if found
         );
+
         if (Defaults::$useUrlBasedVersioning && strlen($path) && $path{0} == 'v') {
             $version = intval(substr($path, 1));
             if ($version && $version <= $this->apiVersion) {
@@ -942,6 +958,9 @@ class Restler extends EventDispatcher
                     }
                     $unauthorized = false;
                     break;
+                } catch (InvalidAuthCredentials $e) {
+                    $this->authenticated = false;
+                    throw $e;
                 } catch (RestException $e) {
                     if (!$unauthorized) {
                         $unauthorized = $e;
@@ -1147,9 +1166,13 @@ class Restler extends EventDispatcher
                 : 'Unknown';
             @header('WWW-Authenticate: ' . $authString, false);
         }
-        echo $this->responseData;
         $this->dispatch('complete');
-        exit;
+        if (Defaults::$returnResponse) {
+            return $this->responseData;
+        } else {
+            echo $this->responseData;
+            exit;
+        }
     }
 
     protected function message(Exception $exception)
@@ -1191,6 +1214,9 @@ class Restler extends EventDispatcher
             $compose->message($exception),
             !$this->productionMode
         );
+        if (Defaults::$returnResponse) {
+            return $this->respond();
+        }
         $this->respond();
     }
 
